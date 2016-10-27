@@ -1,6 +1,3 @@
-:packageUser: solr
-:connectorVersion: 2.2.5
-
 = Hadoop Job Jar
 
 This project includes tools to build a Hadoop job jar that can index documents from HDFS to Solr.
@@ -15,20 +12,6 @@ Supported versions:
 
 * Solr 5.x
 * Hadoop 2.x
-
-// tag::distros[]
-Tested Hadoop Distributions:
-
-* Apache Hadoop
-** 2.7.x
-* Hortonworks
-** HDP 2.3 (Hadoop 2.7.x)
-** HDP 2.2 (Hadoop 2.6.x)
-** HDP 2.1 (Hadoop 2.4.x)
-* MapR
-** MapR 5.0 (Hadoop 2.7.x)
-** MapR 4.0.1 (Hadoop 2.4.x)
-// end::distros[]
 
 // tag::build[]
 == How to Build
@@ -46,12 +29,9 @@ Once the submodule has been pulled, you can build the job jar with this command:
 
 `./gradlew clean shadowJar --info`
 
-This will produce one jar, named `{packageUser}-hadoop-job-{connectorVersion}.jar`, located in the `solr-hadoop-job/build/libs` directory.
+This will produce one jar, named `solr-hadoop-job-{version}.jar`.
 
 If you rebuild the job jar at a later time (to take advantage of updates), remember to update the submodule with `git submodule update`.
-
-NOTE: The Gradle task will also produce `{packageUser}-hadoop-tika-{connectorVersion}.jar` located in the `solr-hadoop-common/solr-hadoop-tika/build/libs` directory. This jar will be needed if you use the `-Dlw.tika.process` parameter described below. Using Tika is recommended when when using the DirectoryIngestMapper or the ZipIngestMapper.
-
 // end::build[]
 
 // tag::how-to-use[]
@@ -59,7 +39,7 @@ NOTE: The Gradle task will also produce `{packageUser}-hadoop-tika-{connectorVer
 
 The job jar allows you to index many different types of content stored in HDFS to Solr. It uses MapReduce to leverage the scaling qualities of http://hadoop.apache.org[Apache Hadoop] while indexing content to Solr.
 
-IMPORTANT: The job jar can be run from any location in your Hadoop cluster, but requires a Hadoop client if used on a server where Hadoop (`bin/hadoop)`) is not installed. The client allows the job jar to to submit the job to Hadoop. The name and availability of a client will vary depending on the Hadoop distribution vendor. See your vendor for more information about how to download a client and configure it if you need one.
+NOTE: The job jar can be run from any location in your Hadoop cluster, but requires a Hadoop client if used on a server where Hadoop (`bin/hadoop)`) is not installed. The client allows the job jar to to submit the job to Hadoop. The name and availability of a client will vary depending on the Hadoop distribution vendor. See your vendor for more information about how to download a client and configure it if you need one.
 
 The job jar uses _ingest mappers_ to parse documents and prepare them to be added to a Solr index. The selection of the ingest mapper is one of the arguments provided to the job when it is started. Details of the available ingest mappers are included in the section <<Ingest Mappers>>.
 
@@ -77,7 +57,7 @@ The Hadoop job jar works in three stages designed to take in raw content and out
 . Run a MapReduce job to extract text and metadata from the raw content.
 . Run a MapReduce job to send the extracted content from HDFS to Solr using the SolrJ client. This implementation works with SolrJ's CloudServer Java client which is aware of where Solr is running via Zookeeper.
 
-NOTE: Incremental indexing, where only changes to a document or directory are processed on successive job jar runs, is not supported. All three steps will be completed each time the job jar is run, regardless of whether the original content has changed.
+NOTE: Incremental indexing, where only changes to a document or directory are processed on successive job jar runs, is not supported. All three steps will be completed each time the job jar is run, regardless of whether the raw content hasn't changed.
 
 The first step of the process converts the input content into a SequenceFile. In order to do this, the entire contents of that file must be read into memory so that it can be written out as a LWDocument in the SequenceFile. Thus, you should be careful to ensure that the system does not load into memory a file that is larger than the Java heap size of the process.
 
@@ -110,7 +90,7 @@ This ingest mapper allows you to index documents found in a defined directory. T
 
 There are no special arguments for this ingest mapper.
 
-When using this ingest mapper, you may want to also use Apache Tika to parse the files. See the `-Dlw.tika.process` parameter below for details on how to flag the job to use Apache Tika and add the required .jar.
+Apache Tika will be used to extract content from these files, so file types supported by Tika will be parsed.
 
 === Grok Ingest Mapper
 This ingest mapper allows you to index log files based on a Logstash configuration file. The class to use with the `-cls` argument is `com.lucidworks.hadoop.ingest.GrokIngestMapper`.
@@ -171,7 +151,7 @@ _Supports_: WarcFileInputFormat documents.
 === Zip Ingest Mapper
 This ingest mapper allows you to index documents contained in `.zip` files. The class to use with the `-cls` argument is `com.lucidworks.hadoop.ingest.ZipIngestMapper`.
 
-There are no special arguments for this ingest mapper. However, when using this ingest mapper, you may want to also use Apache Tika to parse the files. See the `-Dlw.tika.process` parameter below for details on how to flag the job to use Apache Tika and add the required .jar.
+There are no special arguments for this ingest mapper.
 
 _Supports_: ZipFileInputFormat documents.
 // end::ingest-mappers[]
@@ -214,14 +194,6 @@ _Default_: false.  _Required_: No.
 If true, the exploration of a folder will be recursive, meaning it will look for subdirectories to traverse for documents.
 +
 _Default_: false. _Required_: No.
-
-`-Dlw.tika.process`:::
-If true, Apache Tika will be used to parse files. This is most commonly needed when using the DirectoryIngestMapper or the ZipIngestMapper.
-+
-_Default_: false. _Required_: No.
-
-WARNING: If `-Dlw.tika.process` is set to true, the `{packageUser}-hadoop-tika-{connectorVersion}.jar` (including the path, if necessary) should be added to the job arguments with `-libjars` argument.
-
 
 [#csv]
 CSV Ingest Mapper Arguments::
@@ -392,9 +364,9 @@ The number of reducers to use when outputting to the OutputFormat. Depending on 
 
 Using this example job jar argument:
 
-[source,bash,subs="verbatim,attributes"]
+[source,bash]
 ----
-bin/hadoop jar /path/to/{packageUser}-hadoop-job-{connectorVersion}.jar --<1>
+bin/hadoop jar /opt/${namePackage}/job/lucidworks-hadoop-job.jar --<1>
 
    com.lucidworks.hadoop.ingest.IngestJob -- <2>
 
@@ -405,7 +377,7 @@ bin/hadoop jar /path/to/{packageUser}-hadoop-job-{connectorVersion}.jar --<1>
 
 We can summarize the proper order as follows:
 
-<1> The Hadoop command to run a job. This includes the path to the job jar (as necessary).
+<1> The Hadoop command to run a job.
 <2> The main ingest class.
 <3> Mapper arguments, which vary depending on the Mapper class chosen, in the format of `-Dargument=value`.
 <4> Key-value arguments, which include the ingest mapper, Solr collection name, and other parameters, in the format of `-argument value`.

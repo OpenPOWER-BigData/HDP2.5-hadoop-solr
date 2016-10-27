@@ -46,8 +46,6 @@ public class IngestJob extends AbstractJob {
   public static final String OUTPUT_FORMAT_OVERRIDE = "outputFormatOverride";
   public static final String CONF_OPTION = "conf";
   public static final String JOB_NAME_OPTION = "name";
-  public static final String QUIET = "quiet";
-
 
   public static void main(String[] args) throws Exception {
     System.exit(ToolRunner.run(new IngestJob(), args));
@@ -84,7 +82,6 @@ public class IngestJob extends AbstractJob {
     addOption(NUM_REDUCERS_OPTION, "ur",
         "An Integer >= 0 indicating the number of Reducers to use when outputing to the OutputFormat.  "
             + "Depending on the OutputFormat and your system resources, you may wish to have Hadoop do a reduce step first so as to not open too many connections to the output resource.  Default is to not use any reducers.  Note, ");
-    addFlag(QUIET, "q", "Quiet option for common.AbstractJob");
 
     Map<String, List<String>> map = parseArguments(args, false, true);
     if (map == null) {
@@ -178,7 +175,13 @@ public class IngestJob extends AbstractJob {
     if (outputFormatName == null || outputFormatName.equals(LWMapRedOutputFormat.class.getName())) {
       log.info("Using default OutputFormat: {}", LWMapRedOutputFormat.class.getName());
       conf.setOutputFormat(LWMapRedOutputFormat.class);
-      if (!checkSolrOrZkString(conf)) {
+      if (zk != null && !zk.isEmpty()) {
+        conf.set(ZK_CONNECT, zk);
+        conf.set(LucidWorksWriter.SOLR_ZKHOST, zk);
+      } else if (solr != null && !solr.isEmpty()) {
+        conf.set(SOLR_SERVER_URL, solr);
+        conf.set(LucidWorksWriter.SOLR_SERVER_URL, solr);
+      } else {
         System.out.println("You must specify either the " + ZK_CONNECT_OPTION + " or the " + SOLR_SERVER_OPTION);
         return 1;
       }
@@ -280,7 +283,7 @@ public class IngestJob extends AbstractJob {
   }
 
   public void doFinalCommit(JobConf conf, RunningJob job) {
-    if (conf.getBoolean("lww.commit.on.close", false) && checkSolrOrZkString(conf)) {
+    if (conf.getBoolean("lww.commit.on.close", false)) {
       String jobName = job.getJobName();
       log.info("Performing final commit for job " + jobName);
       // Progress can be null here, because no write operation is performed.
@@ -306,20 +309,5 @@ public class IngestJob extends AbstractJob {
       log.error("Error while checking Solr Server", e);
       return false;
     }
-  }
-
-  private boolean checkSolrOrZkString(JobConf conf) {
-    String zk = getOption(ZK_CONNECT_OPTION);
-    String solr = getOption(SOLR_SERVER_OPTION);
-    if (zk != null && !zk.isEmpty()) {
-      conf.set(ZK_CONNECT, zk);
-      conf.set(LucidWorksWriter.SOLR_ZKHOST, zk);
-      return true;
-    } else if (solr != null && !solr.isEmpty()) {
-      conf.set(SOLR_SERVER_URL, solr);
-      conf.set(LucidWorksWriter.SOLR_SERVER_URL, solr);
-      return true;
-    }
-    return false;
   }
 }

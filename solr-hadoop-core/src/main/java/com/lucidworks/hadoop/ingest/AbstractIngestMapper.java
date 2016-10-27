@@ -1,9 +1,7 @@
 package com.lucidworks.hadoop.ingest;
 
 import com.lucidworks.hadoop.io.LWDocument;
-import com.lucidworks.hadoop.io.LWDocumentProvider;
 import com.lucidworks.hadoop.io.LWDocumentWritable;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
@@ -23,8 +21,8 @@ import java.io.IOException;
  * Needs to define how records are transformed (see toDocuments) and how this
  * Mapper is configured (see getFixture)
  */
-public abstract class AbstractIngestMapper<K extends Writable, V extends Writable> extends BaseHadoopIngest
-  implements Mapper<K, V, Text, LWDocumentWritable> {
+public abstract class AbstractIngestMapper<K extends Writable, V extends Writable>
+    extends BaseHadoopIngest implements Mapper<K, V, Text, LWDocumentWritable> {
 
   protected static final Logger log = LoggerFactory.getLogger(AbstractIngestMapper.class);
 
@@ -33,12 +31,9 @@ public abstract class AbstractIngestMapper<K extends Writable, V extends Writabl
   }
 
   @Override
-  public final void map(
-    K key,
-    V value,
-    OutputCollector<Text, LWDocumentWritable> output,
-    Reporter reporter) throws IOException {
-
+  public final void map(K key, V value, OutputCollector<Text, LWDocumentWritable> output,
+                        Reporter reporter) throws IOException {
+    // TODO: potential OOM here if we create a lot of docs from 1.
     LWDocument[] documents = null;
 
     try {
@@ -48,13 +43,16 @@ public abstract class AbstractIngestMapper<K extends Writable, V extends Writabl
       reporter.getCounter(Counters.DOCS_CONVERT_FAILED).increment(1);
     }
     if (documents != null && documents.length > 0) {
-      // XXX: can we batch put these into the OutputFormat? can we still deal w/ the errors properly
+      // TODO: can we batch put these into the OutputFormat? can we still deal w/ the errors properly
       for (LWDocument doc : documents) {
-        log.debug("AIM doc: " + doc.getId());
-        LWDocument[] processedDocs = LWDocumentProvider.processIfNeeded(doc, (JobConf) conf);
-        for (LWDocument processed : processedDocs) {
-          output.collect(new Text(doc.getId()), new LWDocumentWritable(processed));
+        if (log.isDebugEnabled()) {
+          log.debug("AIM doc: " + doc.toString());
+        }
+        try {
+          output.collect(new Text(doc.getId()), new LWDocumentWritable(doc));
           reporter.getCounter(Counters.DOCS_ADDED).increment(1);
+        } catch (Exception e) {
+          e.printStackTrace();
         }
       }
     } else {
@@ -67,9 +65,6 @@ public abstract class AbstractIngestMapper<K extends Writable, V extends Writabl
    * Transform the key and value into a set of PipelineDocuments. This is called
    * from within the map method in the MapReduce execution context
    */
-  protected abstract LWDocument[] toDocuments(
-    K key,
-    V value,
-    Reporter reporter,
-    Configuration conf) throws IOException;
+  protected abstract LWDocument[] toDocuments(K key, V value, Reporter reporter, Configuration conf)
+      throws IOException;
 }

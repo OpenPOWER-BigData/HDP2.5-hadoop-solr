@@ -46,6 +46,7 @@ public class CSVIngestMapperTest extends BaseIngestMapperTestCase {
     configuration.set("idField", "id");
 
     JobConf conf = new JobConf(configuration);
+    LWDocumentProvider.init(conf);
   }
 
   @Test

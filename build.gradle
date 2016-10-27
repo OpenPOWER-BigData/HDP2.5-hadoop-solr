@@ -42,12 +42,6 @@ subprojects {
         csv.enabled false
         html.destination "${buildDir}/jacocoHtml"
       }
-      afterEvaluate {
-        classDirectories = files(classDirectories.files.collect {
-          fileTree(dir: it,
-              exclude: ['**/**/lemurproject/**'])
-        })
-      }
     }
 
     publishing {
@@ -102,13 +96,12 @@ project('solr-hadoop-core') {
       transitive = false
     }
 
-    compile('org.jruby:jruby-complete:1.7.11')
-
-    compile files('libs/logstash-mapper-with-gems.jar')
+    compile files('libs/jruby-complete-1.7.11.jar')
+    compile files('libs/logStash-grok.jar')
 
     testCompile 'com.carrotsearch.randomizedtesting:junit4-ant:1.4.0'
     testCompile "org.apache.lucene:lucene-analyzers-common:${solrVersion}"
-    testCompile 'commons-collections:commons-collections:3.2.2'
+    testCompile 'commons-collections:commons-collections:3.2.1'
 
     testCompile "org.apache.solr:solr-test-framework:${solrVersion}"
     testCompile 'org.apache.mrunit:mrunit:1.0.0:hadoop2@jar'
@@ -151,6 +144,12 @@ project('solr-hadoop-job') {
 
     compile(project(':solr-hadoop-common:solr-hadoop-document')) {
       transitive = false
+    }
+
+    compile "org.apache.tika:tika-core:${tikaVersion}"
+    compile("org.apache.tika:tika-parsers:${tikaVersion}") {
+      exclude module: "asm-debug-all"
+      exclude module: "quartz"
     }
 
   }

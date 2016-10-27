@@ -64,6 +64,8 @@ public class DirectoryIngestMapperTest extends BaseIngestMapperTestCase {
     org.apache.hadoop.mapred.FileInputFormat.setInputPaths(jobConf, new Path(tempDir, "*"));
     Path[] paths = org.apache.hadoop.mapred.FileInputFormat.getInputPaths(jobConf);
     assertEquals(1, paths.length);
+    LWDocumentProvider.init(jobConf);
+
   }
 
   @Test

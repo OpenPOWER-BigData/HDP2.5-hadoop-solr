@@ -2,6 +2,18 @@ package com.lucidworks.hadoop.ingest;
 
 import com.lucidworks.hadoop.ingest.util.GrokHelper;
 import com.lucidworks.hadoop.io.LWDocumentWritable;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -15,23 +27,11 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class GrokHelperTest {
 
   private MapDriver<LongWritable, Text, Text, LWDocumentWritable> mapDriver;
   private JobConf jobConf;
+  private int tempFiles;
   private Path base;
   private FileSystem fs;
 
@@ -94,7 +94,7 @@ public class GrokHelperTest {
 
   @Test
   public void testReadLocal() throws Exception {
-    String configurationFileName = "grok" + File.separator + "IP-WORD.conf";
+    String configurationFileName = "grok" + File.separator +"IP-WORD.conf";
     String path = GrokHelperTest.class.getClassLoader().getResource(configurationFileName)
         .getPath();
 
@@ -224,13 +224,12 @@ public class GrokHelperTest {
   @Ignore
   @Test
   public void addPatternsToHDFS() throws Exception {
-    String conf = "filter {\n" +
-        "  grok {\n" +
-        "    match => [\"message\", \"%{IP:ip} %{WORD:log_message}\"]\n" +
-        "    add_field => [\"received_from_field\", \"%{ip}\"]\n" +
-        "    patterns_dir => [\"/home/user/patterns/extra1.txt\", \"/home/user/patterns/extra2.txt\"]\n" +
-        "  }\n" +
-        "}";
+
+    String configurationFileName = "grok" + File.separator + "confWithAddPatterns.conf";
+    // Create a new file in HDFS
+    URL url = GrokHelperTest.class.getClassLoader().getResource(configurationFileName);
+
+    String conf = GrokHelper.readConfiguration(url.getPath(), new JobConf());
 
     Map<String, Object> params = new HashMap<String, Object>();
     params.put(GrokIngestMapper.CONFIG_STRING_RUBY_PARAM, conf);

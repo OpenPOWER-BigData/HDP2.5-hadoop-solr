@@ -2,12 +2,11 @@ package com.lucidworks.hadoop.ingest;
 
 import com.google.common.base.Charsets;
 import com.google.common.io.Files;
-
+import com.lucidworks.hadoop.io.FusionOutputFormat;
 import com.lucidworks.hadoop.io.LWMapRedOutputFormat;
 import com.lucidworks.hadoop.utils.IngestJobMockMapRedOutFormat;
-import com.lucidworks.hadoop.utils.JobArgs;
 import com.lucidworks.hadoop.utils.MockRecordWriter;
-
+import com.lucidworks.hadoop.utils.TestUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.util.ToolRunner;
@@ -28,50 +27,43 @@ import static org.junit.Assert.fail;
  **/
 public class IngestJobTest extends IngestJobInit {
 
-  @Ignore
   @Test
   public void testCSV() throws Exception {
     Path input = new Path(tempDir, "foo.csv");
-    StringBuilder buffer = new StringBuilder("id,bar,junk,zen,hockey");
-    buffer.append(lineSep).append("id-1, The quick brown fox, jumped, " + "head, gretzky, extra").append(lineSep)
-          .append("id-2, The quick red fox, kicked, head," + " gretzky");
+    StringBuilder buffer = new StringBuilder("id,bar,junk,zen,hockey").append(lineSep)
+        .append("id-1, The quick brown fox, jumped, head, gretzky, extra").append(lineSep)
+        .append("id-2, The quick red fox, kicked, head, gretzky");
 
     addContentToFS(input, buffer.toString());
 
     String jobName = "testCsv";
-
-    String[] args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString())
-                                 .withConf("csvFieldMapping[0=id,1=bar, 2=junk , 3 = zen ,4 = hockey];idField[id];" +
-                                   "csvFirstLineComment[true]")
-                                 .getJobArgs();
+    String[] args = TestUtils
+        .createHadoopJobArgsWithConf(jobName, CSVIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString(),
+            "csvFieldMapping[0=id,1=bar, 2=junk , 3 = zen ,4 = hockey];idField[id];csvFirstLineComment[true]");
 
     // TODO: ToolRunner has some problems with exiting, so this may cause conflicts
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);
-    verifyJob(jobName, 2, null);
+    verifyJob(jobName, 2, new String[]{"id-1", "id-2"}, "hockey", "field_5");
 
     jobName = "testCsv2";
-
-    args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                        .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                        .withInput(input.toUri().toString())
-                        .withConf("csvFieldMapping[0=id,1=bar, 2=junk , 3 = zen ,4 = hockey];idField[id]").getJobArgs();
+    args = TestUtils
+        .createHadoopJobArgsWithConf(jobName, CSVIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString(),
+            "csvFieldMapping[0=id,1=bar, 2=junk , 3 = zen ,4 = hockey];idField[id]");
 
     ToolRunner.run(conf, new IngestJob(), args);
-    verifyJob(jobName, 3, null);
+    verifyJob(jobName, 3, new String[]{"id-1", "id-2"}, "hockey", "field_5");
 
     jobName = "testCsvFieldId";
     // id Field is the the field called "junk"
-    args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                        .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                        .withInput(input.toUri().toString())
-                        .withConf("csvFieldMapping[0=bar, 1=id, 2=junk , 3 = zen ,4 = hockey];idField[junk]")
-                        .getJobArgs();
-
+    args = TestUtils
+        .createHadoopJobArgsWithConf(jobName, CSVIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString(),
+            "csvFieldMapping[0=bar, 1=id, 2=junk , 3 = zen ,4 = hockey];idField[junk]");
     ToolRunner.run(conf, new IngestJob(), args);
-    verifyJob(jobName, 3, null);
+    verifyJob(jobName, 3, new String[]{"jumped", "kicked"}, "hockey", "field_5");
   }
 
   @Test
@@ -88,10 +80,9 @@ public class IngestJobTest extends IngestJobInit {
       }
     }
     String jobName = "testDirectoy";
-
-    String[] args = new JobArgs().withJobName(jobName).withClassname(DirectoryIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString() + "/*").getJobArgs();
+    String[] args = TestUtils
+        .createHadoopOptionalArgs(jobName, DirectoryIngestMapper.class.getName(),
+            DEFAULT_COLLECTION, getBaseUrl(), input.toUri().toString() + "/*");
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);
@@ -110,38 +101,15 @@ public class IngestJobTest extends IngestJobInit {
     addContentToFS(input, Files.toByteArray(zipFile));
 
     String jobName = "testZip";
-
-    String[] args = new JobArgs().withJobName(jobName).withClassname(ZipIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString()).getJobArgs();
-
-    int val = ToolRunner.run(conf, new IngestJob(), args);
-    assertEquals(0, val);
-    verifyJob(jobName, 6, new String[]{"test0.pdf", "test1.doc", "test0.doc", "test3.pdf", "test2.pdf", "test1.pdf"});
-  }
-
-
-  @Test
-  public void testCSVquoteswithCircumflex() throws Exception {
-    String csv = "csv/quotes_with_circumflex.csv";
-    File csvFile = new File(ClassLoader.getSystemClassLoader().getResource(csv).getPath());
-    assertTrue(csv + " does not exist: " + csvFile.getAbsolutePath(), csvFile.exists());
-
-    Path input = new Path(tempDir, csv);
-    addContentToFS(input, Files.toString(csvFile, Charsets.UTF_8));
-
-    String jobName = "testCSVquoteswithCircumflex";
-
-    String[] args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString())
-                                 .withConf("csvDelimiter[^];csvFieldMapping[0=id,1=name_s];csvFirstLineComment[false]")
-                                 .getJobArgs();
+    String[] args = TestUtils
+        .createHadoopOptionalArgs(jobName, ZipIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString());
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);
-    // TODO: (ha"rry) the quotes is messing the field validator.
-    verifyJob(jobName, 2, new String[]{"2"});
+    verifyJob(jobName, 6,
+        new String[]{"test0.pdf", "test1.doc", "test0.doc", "test3.pdf", "test2.pdf",
+            "test1.pdf"}, "body", "Content-Type");
   }
 
   @Test
@@ -153,14 +121,15 @@ public class IngestJobTest extends IngestJobInit {
     addContentToFS(input, Files.toString(warcFile, Charsets.UTF_8));
 
     String jobName = "testWarc";
-    String[] args = new JobArgs().withJobName(jobName).withClassname(WarcIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString()).getJobArgs();
+    String[] args = TestUtils
+        .createHadoopOptionalArgs(jobName, WarcIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString());
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);
     verifyJob(jobName, 3, new String[]{"<urn:uuid:b328f1fe-b2ee-45c0-9139-908850810b52>",
-      "<urn:uuid:6ee9accb-a284-47ef-8785-ed28aee2f79e>"}, "warc.WARC-Target-URI", "warc.WARC-Warcinfo-ID");
+            "<urn:uuid:6ee9accb-a284-47ef-8785-ed28aee2f79e>"}, "warc.WARC-Target-URI",
+        "warc.WARC-Warcinfo-ID");
   }
 
   @Test
@@ -172,11 +141,9 @@ public class IngestJobTest extends IngestJobInit {
     addContentToFS(input, Files.toByteArray(solrFile));
 
     String jobName = "testSolrXML";
-
-    String[] args = new JobArgs().withJobName(jobName).withClassname(SolrXMLIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString()).getJobArgs();
-
+    String[] args = TestUtils
+        .createHadoopOptionalArgs(jobName, SolrXMLIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString());
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);
@@ -192,14 +159,14 @@ public class IngestJobTest extends IngestJobInit {
     addContentToFS(input, Files.toByteArray(seqFile));
 
     String jobName = "testSequenceFile";
-
-    String[] args = new JobArgs().withJobName(jobName).withClassname(SequenceFileIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString()).getJobArgs();
+    String[] args = TestUtils
+        .createHadoopOptionalArgs(jobName, SequenceFileIngestMapper.class.getName(),
+            DEFAULT_COLLECTION, getBaseUrl(), input.toUri().toString());
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);
-    verifyJob(jobName, 776, new String[]{"frank_seq_558", "frank_seq_171", "frank_seq_554", "frank_seq_551"});
+    verifyJob(jobName, 776,
+        new String[]{"frank_seq_558", "frank_seq_171", "frank_seq_554", "frank_seq_551"});
   }
 
   @Test
@@ -217,14 +184,12 @@ public class IngestJobTest extends IngestJobInit {
     addContentToFS(input2, Files.toByteArray(regexFile2));
 
     String jobName = "testRegex";
-
-    String[] args = new JobArgs().withJobName(jobName).withClassname(RegexIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(tempDir.toUri().toString() + File.separator + "regex" + File.separator +
-                                   "regex-small*")
-                                 .withDArgs("-D" + RegexIngestMapper.REGEX + "=\\w+", "-D" + RegexIngestMapper
-                                   .GROUPS_TO_FIELDS + "=0=match")
-                                 .getJobArgs();
+    String[] args = TestUtils
+        .createHadoopOptionalArgs(jobName, RegexIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(),
+            tempDir.toUri().toString() + File.separator + "regex" + File.separator + "regex-small*",
+            "-D" + RegexIngestMapper.REGEX + "=\\w+",
+            "-D" + RegexIngestMapper.GROUPS_TO_FIELDS + "=0=match");
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);
@@ -233,6 +198,7 @@ public class IngestJobTest extends IngestJobInit {
     assertEquals(2, mockRecordWriter.map.size());
   }
 
+  @Ignore // The distributed cache is not adding the conf file
   @Test
   public void testGrok() throws Exception {
     String grok = "grok" + File.separator + "ip-word.log";
@@ -243,15 +209,16 @@ public class IngestJobTest extends IngestJobInit {
 
     // Adding the grok-conf file
     String grokConf = "grok" + File.separator + "IP-WORD.conf";
-    File grokConfFile = new File(ClassLoader.getSystemClassLoader().getResource(grokConf).getPath());
-    assertTrue(grokConf + " does not exist: " + grokConfFile.getAbsolutePath(), grokConfFile.exists());
+    File grokConfFile = new File(
+        ClassLoader.getSystemClassLoader().getResource(grokConf).getPath());
+    assertTrue(grokConf + " does not exist: " + grokConfFile.getAbsolutePath(),
+        grokConfFile.exists());
 
     String jobName = "testGrok";
+    String[] args = TestUtils
+        .createHadoopOptionalArgs(jobName, GrokIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString(), "-Dgrok.uri=" + grokConfFile);
 
-    String[] args = new JobArgs().withJobName(jobName).withClassname(GrokIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString()).withDArgs("-Dgrok.uri=" + grokConfFile)
-                                 .getJobArgs();
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);
     MockRecordWriter mockRecordWriter = IngestJobMockMapRedOutFormat.writers.get(jobName);
@@ -259,27 +226,22 @@ public class IngestJobTest extends IngestJobInit {
     assertEquals(4000, mockRecordWriter.map.size());
   }
 
-  @Ignore
   @Test
   public void testReducer() throws Exception {
     Path input = new Path(tempDir, "reducer.csv");
-    StringBuilder buffer = new StringBuilder("id,bar,junk,zen,hockey");
-    buffer.append(lineSep).append("id-1, The quick brown fox, jumped, " + "head, gretzky, extra").append(lineSep)
-          .append("id-2, The quick red fox, kicked, head," +
-            "" + " gretzky");
+    StringBuilder buffer = new StringBuilder("id,bar,junk,zen,hockey").append(lineSep)
+        .append("id-1, The quick brown fox, jumped, head, gretzky, extra").append(lineSep)
+        .append("id-2, The quick red fox, kicked, head, gretzky");
 
     addContentToFS(input, buffer.toString());
 
     String jobName = "testCsvReducers";
-    String[] args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString()).withReducersClass(IngestReducer.class.getName())
-                                 .withReducersAmount("3")
-                                 .withConf("csvFieldMapping[0=id," + "1=bar, 2=junk , 3 = zen ,4 = hockey];" +
-                                   "idField[id];csvFirstLineComment[true]")
-                                 .getJobArgs();
-
-
+    String[] args = TestUtils
+        .createHadoopOptionalArgs(jobName, CSVIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString(), "--" + IngestJob.REDUCER_OPTION,
+            IngestReducer.class.getName(), "--" + IngestJob.NUM_REDUCERS_OPTION, "3",
+            "--" + IngestJob.CONF_OPTION,
+            "csvFieldMapping[0=id,1=bar, 2=junk , 3 = zen ,4 = hockey];idField[id];csvFirstLineComment[true]");
     conf.set("io.serializations", "com.lucidworks.hadoop.io.impl.LWMockSerealization");
     conf.set("io.sort.mb", "1");
     ToolRunner.run(conf, new IngestJob(), args);
@@ -289,25 +251,26 @@ public class IngestJobTest extends IngestJobInit {
   @Test
   public void testBadArgs() throws Exception {
     String jobName = "testDidnotIngetAnyDocs";
-    String[] args = new JobArgs().withJobName(jobName).withClassname(DirectoryIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(tempDir.toUri().toString()).getJobArgs();
+    // tempDir is empty.
+    String[] args = TestUtils
+        .createHadoopJobArgs(jobName, DirectoryIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), tempDir.toUri().toString());
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(1, val);
     assertErrorMessage("Didn't ingest any document");
 
     Path input = new Path(tempDir, "foo.csv");
-    StringBuilder buffer = new StringBuilder("id,bar,junk,zen,hockey");
-    buffer.append(lineSep).append("id-1, The quick brown fox, jumped, " + "head, gretzky, extra").append(lineSep)
-          .append("id-2, The quick red fox, kicked, head," + " gretzky");
+    StringBuilder buffer = new StringBuilder("id,bar,junk,zen,hockey").append(lineSep)
+        .append("id-1, The quick brown fox, jumped, head, gretzky, extra").append(lineSep)
+        .append("id-2, The quick red fox, kicked, head, gretzky");
 
     addContentToFS(input, buffer.toString());
 
     jobName = "testBadMapper";
     // foo -> bad mapper option
-    args = new JobArgs().withJobName(jobName).withClassname("foo").withCollection(DEFAULT_COLLECTION)
-                        .withZkString(getBaseUrl()).withInput(input.toUri().toString()).getJobArgs();
+    args = TestUtils.createHadoopJobArgs(jobName, "foo", DEFAULT_COLLECTION, getBaseUrl(),
+        input.toUri().toString());
 
     val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(1, val);
@@ -317,30 +280,33 @@ public class IngestJobTest extends IngestJobInit {
     // Plus one to the current jetty port to ensure this not exists
     String invalidSolrConnection = getBaseUrl() + "+1";
 
-    args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                        .withCollection(DEFAULT_COLLECTION).withZkString(invalidSolrConnection)
-                        .withInput(input.toUri().toString()).withOutputFormat(LWMapRedOutputFormat.class.getName())
-                        .getJobArgs();
+    args = TestUtils
+        .createHadoopJobArgsWithConf(jobName, CSVIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            invalidSolrConnection, input.toUri().toString(),
+            "csvFieldMapping[0=id,1=bar, 2=junk , 3 = zen ,4 = hockey];idField[id]", LWMapRedOutputFormat.class
+                .getName());
 
     val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(1, val);
     assertErrorMessage("server not available on");
 
     jobName = "testBadReducer";
-
-    args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                        .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                        .withInput(input.toUri().toString()).withReducersClass("foo").withReducersAmount("3")
-                        .getJobArgs();
+    // foo -> bad reducer class
+    args = TestUtils
+        .createHadoopOptionalArgs(jobName, CSVIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString(), "--" + IngestJob.REDUCER_OPTION, "foo",
+            "--" + IngestJob.NUM_REDUCERS_OPTION, "3", "--" + IngestJob.CONF_OPTION,
+            "csvFieldMapping[0=id,1=bar, 2=junk , 3 = zen ,4 = hockey];idField[id]");
 
     val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(1, val);
     assertErrorMessage("Unable to instantiate IngestReducer class");
 
     jobName = "testNoZKorS";
-    args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                        .withCollection(DEFAULT_COLLECTION).withInput(input.toUri().toString())
-                        .withOutputFormat(LWMapRedOutputFormat.class.getName()).getJobArgs();
+    // zk/s -> null
+    args = TestUtils
+        .createHadoopJobArgs(jobName, CSVIngestMapper.class.getName(), DEFAULT_COLLECTION, null,
+            input.toUri().toString(), LWMapRedOutputFormat.class.getName());
 
     val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(1, val);
@@ -360,18 +326,16 @@ public class IngestJobTest extends IngestJobInit {
     String invalidSolrConnection = getBaseUrl();
 
     Path input = new Path(tempDir, "foo.csv");
-    StringBuilder buffer = new StringBuilder("id,bar,junk,zen,hockey");
-    buffer.append(lineSep).append("id-1, The quick brown fox, jumped, " + "head, gretzky, extra").append(lineSep)
-          .append("id-2, The quick red fox, kicked, head," +
-            "" + " gretzky");
+    StringBuilder buffer = new StringBuilder("id,bar,junk,zen,hockey").append(lineSep)
+        .append("id-1, The quick brown fox, jumped, head, gretzky, extra").append(lineSep)
+        .append("id-2, The quick red fox, kicked, head, gretzky");
 
     addContentToFS(input, buffer.toString());
-
-    String[] args = new JobArgs().withJobName(jobName).withClassname(CSVIngestMapper.class.getName())
-                                 .withCollection("INVALID-COLLECTION").withZkString(invalidSolrConnection)
-                                 .withInput(input.toUri().toString())
-                                 .withConf("csvFieldMapping[0=id,1=bar, 2=junk " + ", 3 = zen ,4 = hockey];idField[id]")
-                                 .withOutputFormat(LWMapRedOutputFormat.class.getName()).getJobArgs();
+    String[] args = TestUtils
+        .createHadoopJobArgsWithConf(jobName, CSVIngestMapper.class.getName(), "INVALID-COLLECTION",
+            invalidSolrConnection, input.toUri().toString(),
+            "csvFieldMapping[0=id,1=bar, 2=junk , 3 = zen ,4 = hockey];idField[id]", LWMapRedOutputFormat.class
+                .getName());
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(1, val);
@@ -410,11 +374,10 @@ public class IngestJobTest extends IngestJobInit {
     addContentToFS(input, Files.toByteArray(xmlFile));
 
     String jobName = "testXml";
-    String[] args = new JobArgs().withJobName(jobName).withClassname(XMLIngestMapper.class.getName())
-                                 .withCollection(DEFAULT_COLLECTION).withZkString(getBaseUrl())
-                                 .withInput(input.toUri().toString()).withConf("lww.xslt[" + inputXsl + "];lww.xml" +
-        ".start[root]; lww.xml.end[root];lww.xml.docXPathExpr[//doc];lww.xml.includeParentAttrsPrefix[p_]")
-                                 .getJobArgs();
+    String[] args = TestUtils
+        .createHadoopJobArgsWithConf(jobName, XMLIngestMapper.class.getName(), DEFAULT_COLLECTION,
+            getBaseUrl(), input.toUri().toString(), "lww.xslt[" + inputXsl + "];lww.xml.start[root];" +
+                "lww.xml.end[root];lww.xml.docXPathExpr[//doc];lww.xml.includeParentAttrsPrefix[p_]");
 
     int val = ToolRunner.run(conf, new IngestJob(), args);
     assertEquals(0, val);

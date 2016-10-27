@@ -21,11 +21,14 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+@Ignore
 public class GrokIngestMapperTest extends BaseIngestMapperTestCase {
 
   private MapDriver<LongWritable, Text, Text, LWDocumentWritable> mapDriver;
   private JobConf jobConf;
   private GrokIngestMapper mapper;
+
+  private static String PATH_S = GrokIngestMapper.PATH_FIELD_NAME + "_s";
 
   @Before
   public void setUp() throws Exception {
@@ -38,6 +41,7 @@ public class GrokIngestMapperTest extends BaseIngestMapperTestCase {
 
     setupCommonConf(configuration);
     jobConf = new JobConf(configuration);
+    LWDocumentProvider.init(jobConf);
   }
 
   @Test
@@ -213,7 +217,6 @@ public class GrokIngestMapperTest extends BaseIngestMapperTestCase {
     // TODO: Check Fields
   }
 
-  @Ignore
   @Test
   public void testAdditionalPattern() throws Exception {
 

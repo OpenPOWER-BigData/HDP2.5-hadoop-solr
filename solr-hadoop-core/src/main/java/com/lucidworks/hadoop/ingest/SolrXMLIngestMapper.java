@@ -36,6 +36,7 @@ public class SolrXMLIngestMapper extends AbstractIngestMapper<Writable, Text> {
   private final AbstractJobFixture fixture = new AbstractJobFixture() {
     @Override
     public void init(JobConf conf) throws IOException {
+      super.init(conf);
       boolean override = conf.getBoolean(IngestJob.INPUT_FORMAT_OVERRIDE, false);
       if (override == false) {
         conf.setInputFormat(SequenceFileInputFormat.class);
@@ -144,7 +145,11 @@ public class SolrXMLIngestMapper extends AbstractIngestMapper<Writable, Text> {
                 docs = new ArrayList<LWDocument>();
               } else if (currTag.equals("doc")) {
                 LWDocument doc = readDoc(parser, missingIdPrefix, docCount);
-                docs.add(doc);
+                LWDocument[] processedDocs = doc.process();
+                for (LWDocument currentDoc : processedDocs) {
+                  docs.add(currentDoc);
+                  docCount++;
+                }
               }//else, ignore everything else
             }
             default: {
